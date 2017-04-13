@@ -32,51 +32,38 @@ class ZillowProperty
       :beds => @xml.xpath("//bedrooms").to_s.gsub!(/<\/?bedrooms>/,"").to_i,
       :lastSoldDate => @xml.xpath("//lastSoldDate").to_s.gsub!(/<\/?lastSoldDate>/,""),
       :lastSoldPrice => @xml.xpath("//lastSoldPrice").to_s.gsub!(/<\/?lastSoldPrice>/,"").to_f,
-      :zestimate => @xml.xpath("///amount").to_s.gsub!(/<\/?amount.*>/,"").to_f
+      :zestimate => @xml.xpath("///amount").to_s.gsub!(/<\/?amount.*>/,"").to_f #used for training only
     }
   end
   
   def to_s
-    @data.values.to_s[1..-2] #strips square brackets
+    @address + ',' + @data.values.to_s[1..-2] #strips square brackets
   end
 end
 
 city_state_zip = "Charlotte+NC"
-address = "429+Wellingford+St"
+#address = "429+Wellingford+St"
 
-#prop = ZillowProperty.new(address, city_state_zip)
-#print prop.to_s
-
-num_compare = 5     #number of comparable recent sales to obtain
-prop_id = ''   #ID for the property for which to obtain information
-zws_id = "X1-ZWz19dcnto8avf_7x5fi"   #MY Zillow Web Service Identifier
-
-
-
-all_addresses = Array.new
-
-def get_comps(prop_id)
+def get_comps(prop_id, search, level)
+  #number of comparable recent sales to obtain
+  num_compare = 2
+  #MY Zillow Web Service Identifier
+  zws_id = "X1-ZWz19dcnto8avf_7x5fi"
+  
   uri_str = "http://www.zillow.com/webservice/GetComps.htm?zws-id=#{zws_id}&zpid=#{prop_id}&count=#{num_compare}"
   xml = Nokogiri::XML(Net::HTTP.get(URI(uri_str)))
   new_addresses = xml.xpath("//street").to_s.gsub!(/<\/?street>/,"/").gsub(/ /,'+').split('/').delete_if {|i| i==""}
-  search_addresses = Set.new new_addresses
+  new_addresses.each {|i| search.add(i)}
+  if(level < 2)
+    new_zpids = xml.xpath("//zpid").to_s.gsub!(/<\/?zpid>/,"/").split('/').delete_if {|i| i==""}
+    new_zpids.each {|i| get_comps(i,search,level+1)}
+  end
 end
 
-#puts "latitude, longitude, taxAssessmentYear, taxAssessment, yearBuilt, lotSizeSqFt, finishedSqFt"
-while !search_addresses.empty?
-  if count < 50
-    current = search_addresses.to_a.remove_at 1
-    all_addresses.add current
-    
-    count++
-end
+#puts "address, latitude, longitude, taxAssessmentYear, taxAssessment, yearBuilt, lotSizeSqFt, finishedSqFt"
+search_addresses = Set.new
+get_comps(6189867,search_addresses,0)
 
-search_addresses.each do |i|
-  prop = ZillowProperty.new(i, city_state_zip)
-  all_addresses.add i
-  puts prop.to_s
-end
-
-puts get_comps(prop_id)
-
-#puts all_addresses
+properties = Array.new
+search_addresses.each {|i| properties.push(ZillowProperty.new(i,city_state_zip))}
+properties.each {|i| puts i}
